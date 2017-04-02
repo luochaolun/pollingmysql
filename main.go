@@ -64,7 +64,7 @@ func init() {
 		MaxIdle: 1000,
 		MaxOpen: 2000,
 		User:    "root",
-		Pwd:     "te8780511",
+		Pwd:     "",
 		DB:      "mobiles",
 		Port:    3306,
 	}
