@@ -206,8 +206,11 @@ func main() {
 		over <- true
 		fmt.Println("强制退出...")
 	}
+
 	//time.Sleep(time.Millisecond)
-	time.Sleep(time.Second)
+
+	time.Sleep(time.Second)	//这里不添加Sleep,会有部分数据显示不出来,如果你有更好的办法,欢迎提出
+
 	t2 := time.Since(t1)
 	fmt.Println("运行时长: ", t2)
 	/*
