@@ -6,8 +6,11 @@ import (
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
 	"net/url"
+	"os"
+	"os/signal"
 	"runtime"
 	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -16,10 +19,11 @@ const (
 )
 
 var (
-	mc   *MySqlConfig
-	p    uint32
-	over = make(chan bool)
-	sem  = make(chan uint32, 10)
+	mc         *MySqlConfig
+	p          uint32
+	over       = make(chan bool)
+	sem        = make(chan uint32, 20)
+	signalChan = make(chan os.Signal, 1)
 )
 
 type Mobile struct {
@@ -152,37 +156,57 @@ func main() {
 	runtime.GOMAXPROCS(maxProcs) //限制同时运行的goroutines数量
 	//fmt.Println("数据库初始化完成!")
 
+	t1 := time.Now()
+
 	go func() {
+	LabExit:
 		for {
-			no := atomic.AddUint32(&p, 1)
-			sem <- no
+			select {
+			case <-over:
+				break LabExit
+			default:
+				no := atomic.AddUint32(&p, 1)
+				sem <- no
 
-			mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "13%", (no-1)*PerPageNums, PerPageNums)
+				mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "13%", (no-1)*PerPageNums, PerPageNums)
 
-			if err != nil {
+				if err != nil {
+					<-sem
+					break LabExit
+				}
+
+				//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
+				//fmt.Println(reflect.TypeOf(mobiles).Elem())
+				//fmt.Println(reflect.ValueOf(mobiles))
+
+				//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
+				for _, mobile := range mobiles {
+					fmt.Println((*mobile).id, (*mobile).mobile)
+				}
 				<-sem
-				panic(err)
-			}
 
-			//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
-			//fmt.Println(reflect.TypeOf(mobiles).Elem())
-			//fmt.Println(reflect.ValueOf(mobiles))
+				//time.Sleep(time.Millisecond)
 
-			//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
-			for _, mobile := range mobiles {
-				fmt.Println((*mobile).id, (*mobile).mobile)
-			}
-			<-sem
-
-			time.Sleep(time.Millisecond)
-
-			if len(mobiles) == 0 {
-				over <- true
+				if len(mobiles) == 0 {
+					over <- true
+				}
 			}
 		}
 	}()
 
-	<-over
+	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+
+	select {
+	case <-over:
+		fmt.Println("正常结束...")
+	case <-signalChan:
+		over <- true
+		fmt.Println("强制退出...")
+	}
+	//time.Sleep(time.Millisecond)
+	time.Sleep(time.Second)
+	t2 := time.Since(t1)
+	fmt.Println("运行时长: ", t2)
 	/*
 		infos, err1 := getAll1("SELECT id,mobile FROM t_mobile ORDER BY id ASC LIMIT 50")
 		if err1 != nil{
