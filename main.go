@@ -158,41 +158,43 @@ func main() {
 
 	t1 := time.Now()
 
-	go func() {
-	LabExit:
-		for {
-			select {
-			case <-over:
-				break LabExit
-			default:
-				no := atomic.AddUint32(&p, 1)
-				sem <- no
-
-				mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "1%", (no-1)*PerPageNums, PerPageNums)
-
-				if err != nil {
-					<-sem
+	for i := 0; i < 3; i++ {
+		go func() {
+		LabExit:
+			for {
+				select {
+				case <-over:
 					break LabExit
-				}
+				default:
+					no := atomic.AddUint32(&p, 1)
+					sem <- no
 
-				//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
-				//fmt.Println(reflect.TypeOf(mobiles).Elem())
-				//fmt.Println(reflect.ValueOf(mobiles))
+					mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "1%", (no-1)*PerPageNums, PerPageNums)
 
-				//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
-				for _, mobile := range mobiles {
-					fmt.Println((*mobile).id, (*mobile).mobile)
-				}
-				<-sem
+					if err != nil {
+						<-sem
+						break LabExit
+					}
 
-				//time.Sleep(time.Millisecond)
+					//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
+					//fmt.Println(reflect.TypeOf(mobiles).Elem())
+					//fmt.Println(reflect.ValueOf(mobiles))
 
-				if len(mobiles) == 0 {
-					over <- true
+					//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
+					for _, mobile := range mobiles {
+						fmt.Println((*mobile).id, (*mobile).mobile)
+					}
+					<-sem
+
+					//time.Sleep(time.Millisecond)
+
+					if len(mobiles) == 0 {
+						over <- true
+					}
 				}
 			}
-		}
-	}()
+		}()
+	}
 
 	go func() {
 		//signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
@@ -209,7 +211,7 @@ func main() {
 
 	//time.Sleep(time.Millisecond)
 
-	time.Sleep(time.Second)	//这里不添加Sleep,会有部分数据显示不出来,如果你有更好的办法,欢迎提出
+	time.Sleep(time.Second) //这里不添加Sleep,会有部分数据显示不出来,如果你有更好的办法,欢迎提出
 
 	t2 := time.Since(t1)
 	fmt.Println("运行时长: ", t2)
