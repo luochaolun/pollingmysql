@@ -10,7 +10,7 @@ import (
 	"os/signal"
 	"runtime"
 	"sync/atomic"
-	"syscall"
+	//"syscall"
 	"time"
 )
 
@@ -168,7 +168,7 @@ func main() {
 				no := atomic.AddUint32(&p, 1)
 				sem <- no
 
-				mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "13%", (no-1)*PerPageNums, PerPageNums)
+				mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "1%", (no-1)*PerPageNums, PerPageNums)
 
 				if err != nil {
 					<-sem
@@ -194,7 +194,10 @@ func main() {
 		}
 	}()
 
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		//signal.Notify(signalChan, syscall.SIGINT, syscall.SIGTERM)
+		signal.Notify(signalChan, os.Interrupt, os.Kill)
+	}()
 
 	select {
 	case <-over:
