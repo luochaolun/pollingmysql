@@ -3,14 +3,23 @@ package main
 import (
 	"fmt"
 	//"reflect"
-	"runtime"
-	"net/url"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	"net/url"
+	"runtime"
+	"sync/atomic"
+	"time"
+)
+
+const (
+	PerPageNums = 30
 )
 
 var (
-	mc *MySqlConfig
+	mc   *MySqlConfig
+	p    uint32
+	over = make(chan bool)
+	sem  = make(chan uint32, 10)
 )
 
 type Mobile struct {
@@ -75,10 +84,10 @@ func init() {
 	}
 }
 
-func getAll(sql string, param ...interface{}) ([]*Mobile, error){
+func getAll(sql string, param ...interface{}) ([]*Mobile, error) {
 	var mobiles []*Mobile
 
-	fmt.Println(param)
+	//fmt.Println(param)
 	//fmt.Println(reflect.TypeOf(param))
 
 	err := mc.pool.Ping()
@@ -111,7 +120,7 @@ func getAll(sql string, param ...interface{}) ([]*Mobile, error){
 	return mobiles, nil
 }
 
-func getAll1(sql string) (map[interface{}]interface{}, error){
+func getAll1(sql string) (map[interface{}]interface{}, error) {
 	mobiles := make(map[interface{}]interface{})
 	var mobile Mobile
 
@@ -141,25 +150,44 @@ func getAll1(sql string) (map[interface{}]interface{}, error){
 func main() {
 	maxProcs := runtime.NumCPU() // 获取cpu个数
 	runtime.GOMAXPROCS(maxProcs) //限制同时运行的goroutines数量
+	//fmt.Println("数据库初始化完成!")
 
-	fmt.Println("数据库初始化完成!")
+	go func() {
+		for {
+			no := atomic.AddUint32(&p, 1)
+			sem <- no
 
-	mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "131%", 20, 20)
-	if err != nil{
-		panic(err)
-	}
+			mobiles, err := getAll("SELECT id,mobile FROM t_mobile WHERE mobile LIKE ? LIMIT ?,?", "13%", (no-1)*PerPageNums, PerPageNums)
 
-	//fmt.Printf("%v", mobiles)
-	//fmt.Println(reflect.TypeOf(mobiles).Elem())
-	//fmt.Println(reflect.ValueOf(mobiles))
+			if err != nil {
+				<-sem
+				panic(err)
+			}
 
-	for _, mobile := range mobiles {
-		fmt.Println((*mobile).id, (*mobile).mobile)
-	}
+			//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
+			//fmt.Println(reflect.TypeOf(mobiles).Elem())
+			//fmt.Println(reflect.ValueOf(mobiles))
 
-	infos, err1 := getAll1("SELECT id,mobile FROM t_mobile ORDER BY id ASC LIMIT 50")
-	if err1 != nil{
-		panic(err1)
-	}
-	fmt.Println(infos)
+			//fmt.Printf("p=%d, %v, %d\n", p, mobiles, len(mobiles))
+			for _, mobile := range mobiles {
+				fmt.Println((*mobile).id, (*mobile).mobile)
+			}
+			<-sem
+
+			time.Sleep(time.Millisecond)
+
+			if len(mobiles) == 0 {
+				over <- true
+			}
+		}
+	}()
+
+	<-over
+	/*
+		infos, err1 := getAll1("SELECT id,mobile FROM t_mobile ORDER BY id ASC LIMIT 50")
+		if err1 != nil{
+			panic(err1)
+		}
+		fmt.Println(infos)
+	*/
 }
