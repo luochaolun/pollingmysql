@@ -22,7 +22,7 @@ var (
 	mc         *MySqlConfig
 	p          uint32
 	over       = make(chan bool)
-	sem        = make(chan uint32, 20)
+	sem        = make(chan uint32, 10)
 	signalChan = make(chan os.Signal, 1)
 )
 
